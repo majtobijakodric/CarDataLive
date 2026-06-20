@@ -102,7 +102,7 @@ const TripsView = (() => {
     const set = new Set();
     for (const r of readings) {
       for (const [k, v] of Object.entries(r)) {
-        if (k === 'timestamp' || k === 'trip_id') continue;
+        if (k === 'timestamp' || k === 'trip_id' || k === 'id') continue;
         if (typeof v === 'number') set.add(k);
       }
     }

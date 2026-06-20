@@ -4,7 +4,8 @@
   "description": "OBD2 Data Logger backend + web dashboard",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --env-file=.env server.js"
   },
   "engines": {
     "node": ">=20"
