@@ -2,7 +2,7 @@
 
 Node.js + Express backend and web dashboard for logging real-time OBD2 data from
 a Ford Focus 2011. An Android app POSTs sensor readings over cellular; this server
-stores them in MySQL and serves a dark-themed dashboard (vanilla JS + Chart.js).
+stores them in MySQL and serves an editorial light-themed dashboard (vanilla JS + Chart.js).
 
 ## Run locally
 

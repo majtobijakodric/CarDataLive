@@ -134,36 +134,54 @@ function parseTs(ts) {
   return new Date(String(ts).replace(' ', 'T') + 'Z');
 }
 
-// Distinct chart colours for overlaid series.
+// Distinct chart colours for overlaid series (editorial palette).
 const SERIES_COLORS = [
-  '#4cc9f0', '#f72585', '#3ddc84', '#ffd166', '#b388ff',
-  '#ff7b54', '#06d6a0', '#ef476f', '#118ab2', '#fca311',
+  '#16150f', '#d8412b', '#2f5fd0', '#c08a1e', '#1f9d57',
+  '#7a4fd8', '#0f8a8a', '#b03060',
 ];
 
-// Chart.js dark theme defaults (applied once Chart is available).
+const ACCENT = '#d8412b';
+const MONO_FONT = "'IBM Plex Mono', ui-monospace, monospace";
+
+// Chart.js light theme defaults (applied once Chart is available).
 if (window.Chart) {
-  Chart.defaults.color = '#9a9ac0';
-  Chart.defaults.borderColor = '#32325a';
-  Chart.defaults.font.family =
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  Chart.defaults.color = '#908d82';
+  Chart.defaults.borderColor = '#ededea';
+  Chart.defaults.font.family = MONO_FONT;
+  Chart.defaults.font.size = 10;
 }
 
-// Base options for a time-ish line chart with dark grid.
-function darkLineOptions(extra = {}) {
-  return Object.assign({
+// Base options for a line/bar chart on the light "paper" theme.
+// Pass a y-axis title string for the single-axis charts.
+function chartBase(yTitle) {
+  return {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: { labels: { color: '#e8e8f5' } },
-      tooltip: { backgroundColor: '#20203a', borderColor: '#32325a', borderWidth: 1 },
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#16150f', padding: 10, cornerRadius: 0, displayColors: false,
+        titleFont: { family: MONO_FONT }, bodyFont: { family: MONO_FONT },
+      },
     },
     scales: {
-      x: { grid: { color: 'rgba(50,50,90,0.4)' }, ticks: { color: '#9a9ac0', maxTicksLimit: 10 } },
+      x: {
+        grid: { display: false },
+        border: { color: '#d2cfc4' },
+        ticks: { color: '#b9b6ab', maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: '#ededea' },
+        border: { display: false },
+        ticks: { color: '#b9b6ab' },
+        title: { display: !!yTitle, text: yTitle || '', color: '#908d82' },
+      },
     },
-  }, extra);
+  };
 }
 
 window.OBD = {
-  GROUP_ORDER, PID_META, metaFor, fmtValue, parseTs, SERIES_COLORS, darkLineOptions,
+  GROUP_ORDER, PID_META, metaFor, fmtValue, parseTs, SERIES_COLORS, ACCENT, chartBase,
 };

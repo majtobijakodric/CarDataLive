@@ -1,22 +1,25 @@
-/* Trips tab: list of trips + a detail view with a multi-PID Chart.js line chart. */
+/* Trips tab: editorial trip table + detail view with summary row,
+   field chips and a multi-PID Chart.js line chart on the light theme. */
 
 const TripsView = (() => {
-  const { metaFor, fmtValue, parseTs, SERIES_COLORS, darkLineOptions } = window.OBD;
+  const { metaFor, fmtValue, parseTs, SERIES_COLORS, chartBase } = window.OBD;
 
   const listView = document.getElementById('trips-list-view');
   const detailView = document.getElementById('trip-detail-view');
   const tbody = document.getElementById('trips-tbody');
   const emptyMsg = document.getElementById('trips-empty');
+  const countEl = document.getElementById('trips-count');
   const backBtn = document.getElementById('trip-back');
   const detailTitle = document.getElementById('trip-detail-title');
-  const pickerEl = document.getElementById('field-picker');
+  const detailSub = document.getElementById('trip-detail-sub');
   const summaryEl = document.getElementById('trip-summary');
+  const pickerEl = document.getElementById('field-picker');
   const canvas = document.getElementById('trip-chart');
 
   let tripsById = {};
   let chart = null;
   let currentReadings = [];
-  let selectedFields = new Set();
+  let selectedFields = [];
   let loaded = false;
 
   function fmtDuration(sec) {
@@ -26,15 +29,13 @@ const TripsView = (() => {
     const s = sec % 60;
     return h > 0 ? `${h}h ${m}m` : (m > 0 ? `${m}m ${s}s` : `${s}s`);
   }
+  function dShort(d) { return d ? d.toLocaleDateString(undefined, { day: '2-digit', month: 'short' }) : '–'; }
+  function hm(d) { return d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '–'; }
+  function hms(d) { return d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''; }
+  function dLong(d) { return d ? d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) : 'Trip'; }
 
-  function showList() {
-    detailView.hidden = true;
-    listView.hidden = false;
-  }
-  function showDetail() {
-    listView.hidden = true;
-    detailView.hidden = false;
-  }
+  function showList() { detailView.hidden = true; listView.hidden = false; }
+  function showDetail() { listView.hidden = true; detailView.hidden = false; }
 
   async function load() {
     try {
@@ -43,11 +44,9 @@ const TripsView = (() => {
       const trips = await res.json();
       tripsById = {};
       tbody.innerHTML = '';
+      countEl.textContent = trips.length ? `${trips.length} recorded` : '';
 
-      if (!trips.length) {
-        emptyMsg.hidden = false;
-        return;
-      }
+      if (!trips.length) { emptyMsg.hidden = false; loaded = true; return; }
       emptyMsg.hidden = true;
 
       for (const t of trips) {
@@ -55,14 +54,14 @@ const TripsView = (() => {
         const start = parseTs(t.start_time);
         const tr = document.createElement('tr');
         tr.innerHTML =
-          `<td>${start ? start.toLocaleDateString() : '–'}</td>` +
-          `<td>${start ? start.toLocaleTimeString() : '–'}</td>` +
+          `<td class="l">${dShort(start)}</td>` +
+          `<td class="l mid">${hm(start)}</td>` +
           `<td>${fmtDuration(t.duration_seconds)}</td>` +
-          `<td>${t.distance_km != null ? fmtValue(t.distance_km) + ' km' : '–'}</td>` +
+          `<td>${t.distance_km != null ? fmtValue(t.distance_km) : '–'}</td>` +
           `<td>${t.avg_speed_kmh != null ? fmtValue(t.avg_speed_kmh) : '–'}</td>` +
           `<td>${t.max_speed_kmh != null ? fmtValue(t.max_speed_kmh) : '–'}</td>` +
           `<td>${t.avg_rpm != null ? fmtValue(t.avg_rpm) : '–'}</td>` +
-          `<td>${t.reading_count}</td>`;
+          `<td class="dim">${t.reading_count}</td>`;
         tr.addEventListener('click', () => openDetail(t.trip_id));
         tbody.appendChild(tr);
       }
@@ -75,9 +74,16 @@ const TripsView = (() => {
 
   async function openDetail(tripId) {
     const trip = tripsById[tripId];
-    detailTitle.textContent = trip
-      ? `Trip — ${parseTs(trip.start_time).toLocaleString()}`
-      : 'Trip detail';
+    const start = trip ? parseTs(trip.start_time) : null;
+    detailTitle.textContent = dLong(start);
+    if (trip && start) {
+      const end = new Date(start.getTime() + trip.duration_seconds * 1000);
+      detailSub.textContent =
+        `${hm(start)} – ${hm(end)} · ${fmtDuration(trip.duration_seconds)} · Trip #${trip.trip_id}`;
+    } else {
+      detailSub.textContent = '';
+    }
+    renderSummary(trip);
     showDetail();
 
     try {
@@ -86,14 +92,12 @@ const TripsView = (() => {
       const data = await res.json();
       currentReadings = data.readings || [];
       buildPicker(currentReadings);
-      renderSummary(trip);
       drawChart();
     } catch (err) {
       detailTitle.textContent = 'Failed to load trip';
     }
   }
 
-  // Find numeric columns present in the readings.
   function numericFields(readings) {
     const set = new Set();
     for (const r of readings) {
@@ -107,57 +111,56 @@ const TripsView = (() => {
 
   function buildPicker(readings) {
     const fields = numericFields(readings);
-    selectedFields = new Set();
-    if (fields.includes('speed_kmh')) selectedFields.add('speed_kmh');
-    if (fields.includes('rpm')) selectedFields.add('rpm');
-    if (selectedFields.size === 0 && fields.length) selectedFields.add(fields[0]);
+    selectedFields = [];
+    if (fields.includes('speed_kmh')) selectedFields.push('speed_kmh');
+    if (fields.includes('rpm')) selectedFields.push('rpm');
+    if (!selectedFields.length && fields.length) selectedFields.push(fields[0]);
+    renderPicker(fields);
+  }
 
+  function renderPicker(fields) {
     pickerEl.innerHTML = '';
     for (const f of fields) {
-      const m = metaFor(f);
-      const label = document.createElement('label');
-      label.className = 'field-chip' + (selectedFields.has(f) ? ' on' : '');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = selectedFields.has(f);
-      cb.addEventListener('change', () => {
-        if (cb.checked) selectedFields.add(f); else selectedFields.delete(f);
-        label.classList.toggle('on', cb.checked);
+      const on = selectedFields.includes(f);
+      const color = on ? SERIES_COLORS[selectedFields.indexOf(f) % SERIES_COLORS.length] : '#cfccc2';
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'field-chip' + (on ? ' on' : '');
+      chip.innerHTML = `<span class="swatch" style="background:${color}"></span>${metaFor(f).label}`;
+      chip.addEventListener('click', () => {
+        const i = selectedFields.indexOf(f);
+        if (i >= 0) selectedFields.splice(i, 1); else selectedFields.push(f);
+        renderPicker(fields);
         drawChart();
       });
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(m.label));
-      pickerEl.appendChild(label);
+      pickerEl.appendChild(chip);
     }
   }
 
   function drawChart() {
-    const labels = currentReadings.map((r) => {
-      const d = parseTs(r.timestamp);
-      return d ? d.toLocaleTimeString() : '';
-    });
-
-    // One Y axis per distinct unit; alternate left/right positions.
-    const fields = [...selectedFields];
+    const labels = currentReadings.map((r) => hms(parseTs(r.timestamp)));
+    const base = chartBase('');
+    const scales = { x: base.scales.x };
     const unitAxis = {};
-    const scales = darkLineOptions().scales;
     let axisIdx = 0;
-    for (const f of fields) {
+
+    for (const f of selectedFields) {
       const unit = metaFor(f).unit || '';
       if (!(unit in unitAxis)) {
         const id = `y${axisIdx}`;
         unitAxis[unit] = id;
         scales[id] = {
           position: axisIdx % 2 === 0 ? 'left' : 'right',
-          title: { display: !!unit, text: unit, color: '#9a9ac0' },
-          grid: { drawOnChartArea: axisIdx === 0, color: 'rgba(50,50,90,0.4)' },
-          ticks: { color: '#9a9ac0' },
+          grid: { drawOnChartArea: axisIdx === 0, color: '#ededea' },
+          border: { display: false },
+          ticks: { color: '#b9b6ab' },
+          title: { display: !!unit, text: unit, color: '#908d82' },
         };
         axisIdx++;
       }
     }
 
-    const datasets = fields.map((f, i) => {
+    const datasets = selectedFields.map((f, i) => {
       const color = SERIES_COLORS[i % SERIES_COLORS.length];
       return {
         label: metaFor(f).label,
@@ -167,37 +170,35 @@ const TripsView = (() => {
         yAxisID: unitAxis[metaFor(f).unit || ''],
         borderWidth: 1.6,
         pointRadius: 0,
-        tension: 0.25,
+        tension: 0.3,
         spanGaps: true,
       };
     });
 
-    const options = darkLineOptions();
-    options.scales = scales;
-
+    const options = Object.assign({}, base, { scales });
     if (chart) chart.destroy();
     chart = new Chart(canvas, { type: 'line', data: { labels, datasets }, options });
   }
 
   function renderSummary(trip) {
     if (!trip) { summaryEl.innerHTML = ''; return; }
-    const cards = [
+    const cells = [
       ['Duration', fmtDuration(trip.duration_seconds), ''],
       ['Distance', trip.distance_km != null ? fmtValue(trip.distance_km) : '–', 'km'],
-      ['Avg Speed', fmtValue(trip.avg_speed_kmh), 'km/h'],
-      ['Max Speed', fmtValue(trip.max_speed_kmh), 'km/h'],
+      ['Avg speed', fmtValue(trip.avg_speed_kmh), 'km/h'],
+      ['Max speed', fmtValue(trip.max_speed_kmh), 'km/h'],
       ['Avg RPM', fmtValue(trip.avg_rpm), 'rpm'],
       ['Readings', String(trip.reading_count), ''],
     ];
-    summaryEl.innerHTML = cards.map(([label, val, unit]) =>
-      `<div class="metric-card"><div class="label">${label}</div>` +
-      `<div class="value">${val}${unit ? `<span class="unit">${unit}</span>` : ''}</div></div>`
+    summaryEl.innerHTML = cells.map(([label, val, unit]) =>
+      `<div class="summary-cell"><div class="label">${label}</div>` +
+      `<div class="num"><span class="v">${val}</span>` +
+      (unit ? `<span class="u">${unit}</span>` : '') +
+      `</div></div>`
     ).join('');
   }
 
-  function ensureLoaded() {
-    if (!loaded) load();
-  }
+  function ensureLoaded() { if (!loaded) load(); }
 
   backBtn.addEventListener('click', showList);
 

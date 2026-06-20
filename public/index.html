@@ -3,51 +3,98 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OBD2 Data Logger</title>
+  <title>CarDataLive — OBD-II Telemetry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
-      <span class="live-dot" id="live-dot" title="Live status"></span>
-      <h1>OBD2 Data Logger</h1>
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <div class="brand-name">
+          <div class="name">CarDataLive</div>
+          <div class="sub">OBD-II TELEMETRY</div>
+        </div>
+      </div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="live">Live</button>
+        <button class="tab" data-tab="trips">Trips</button>
+        <button class="tab" data-tab="stats">Stats</button>
+      </nav>
+      <div class="topbar-right">
+        <div class="veh">
+          <div class="veh-name">Ford Focus</div>
+          <div class="veh-spec">2011 · 1.6 Ti-VCT</div>
+        </div>
+        <button id="logout-btn" class="btn-ghost" title="Sign out">Sign out</button>
+      </div>
     </div>
-    <nav class="tabs">
-      <button class="tab active" data-tab="live">Live</button>
-      <button class="tab" data-tab="trips">Trips</button>
-      <button class="tab" data-tab="stats">Stats</button>
-    </nav>
-    <button id="logout-btn" class="btn-ghost" title="Sign out">Logout</button>
   </header>
 
   <main class="content">
-    <!-- LIVE -->
+    <!-- ============ LIVE ============ -->
     <section id="tab-live" class="tab-panel active">
-      <div class="live-hero">
-        <div class="hero-metric">
-          <div class="hero-value" id="live-speed">--</div>
-          <div class="hero-unit">km/h</div>
-        </div>
-        <div class="hero-metric">
-          <div class="hero-value" id="live-rpm">--</div>
-          <div class="hero-unit">rpm</div>
-        </div>
+      <div class="live-head">
+        <span class="live-dot" id="live-dot" title="Live status"></span>
+        <span class="live-label" id="live-label">Live telemetry</span>
+        <span class="live-clock" id="live-status"></span>
       </div>
-      <div class="live-status" id="live-status">Waiting for data…</div>
-      <div class="card-grid" id="live-cards"></div>
+
+      <div class="hero">
+        <div class="hero-cell">
+          <div class="cell-label">Speed</div>
+          <div class="hero-num"><span class="v" id="live-speed">--</span><span class="u">km/h</span></div>
+          <svg class="spark" viewBox="0 0 260 38" preserveAspectRatio="none">
+            <polyline id="spark-speed" points="" fill="none" stroke="#16150f" stroke-width="1.4"
+              vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div class="hero-cell bordered">
+          <div class="cell-label">Engine RPM</div>
+          <div class="hero-num"><span class="v" id="live-rpm">--</span><span class="u">rpm</span></div>
+          <svg class="spark" viewBox="0 0 260 38" preserveAspectRatio="none">
+            <polyline id="spark-rpm" points="" fill="none" stroke="#d8412b" stroke-width="1.4"
+              vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div class="hero-secondary" id="live-secondary"></div>
+      </div>
+
+      <div class="params-head">
+        <div>
+          <div class="eyebrow">Parameters</div>
+          <div class="count"><span class="n" id="param-count">0</span> live PIDs</div>
+        </div>
+        <input id="param-filter" class="filter-input" placeholder="Filter parameters…" autocomplete="off" />
+      </div>
+
+      <div class="param-grid" id="live-cards"></div>
+      <div class="no-match" id="live-nomatch" hidden>No parameters match your filter.</div>
     </section>
 
-    <!-- TRIPS -->
+    <!-- ============ TRIPS ============ -->
     <section id="tab-trips" class="tab-panel">
       <div id="trips-list-view">
-        <h2>Trips</h2>
+        <div class="section-head">
+          <h2>Trips</h2>
+          <span class="sub" id="trips-count"></span>
+        </div>
         <div class="table-wrap">
           <table class="trips-table">
             <thead>
               <tr>
-                <th>Date</th><th>Start</th><th>Duration</th><th>Distance</th>
-                <th>Avg Speed</th><th>Max Speed</th><th>Avg RPM</th><th>Readings</th>
+                <th class="l">Date</th>
+                <th class="l">Start</th>
+                <th>Duration</th>
+                <th>Distance</th>
+                <th>Avg km/h</th>
+                <th>Max km/h</th>
+                <th>Avg RPM</th>
+                <th>Pts</th>
               </tr>
             </thead>
             <tbody id="trips-tbody"></tbody>
@@ -57,20 +104,32 @@
       </div>
 
       <div id="trip-detail-view" hidden>
-        <button class="btn-ghost" id="trip-back">← Back to trips</button>
-        <h2 id="trip-detail-title">Trip detail</h2>
+        <button class="back-link" id="trip-back">← All trips</button>
+        <h2 class="detail-title" id="trip-detail-title">Trip detail</h2>
+        <div class="detail-sub" id="trip-detail-sub"></div>
+        <div class="summary-row" id="trip-summary"></div>
         <div class="field-picker" id="field-picker"></div>
         <div class="chart-box"><canvas id="trip-chart"></canvas></div>
-        <div class="card-grid" id="trip-summary"></div>
       </div>
     </section>
 
-    <!-- STATS -->
+    <!-- ============ STATS ============ -->
     <section id="tab-stats" class="tab-panel">
-      <h2>Overall Stats</h2>
-      <div class="card-grid" id="stats-cards"></div>
-      <div class="chart-box"><canvas id="stats-speed-chart"></canvas></div>
-      <div class="chart-box"><canvas id="stats-fuel-chart"></canvas></div>
+      <div class="section-head">
+        <h2>Overview</h2>
+        <span class="sub" id="stats-sub"></span>
+      </div>
+      <div class="stat-row" id="stats-cards"></div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-title">Avg speed per trip</div>
+          <div class="chart-body"><canvas id="stats-speed-chart"></canvas></div>
+        </div>
+        <div class="chart-card" id="stats-fuel-card">
+          <div class="chart-title">Fuel rate trend</div>
+          <div class="chart-body"><canvas id="stats-fuel-chart"></canvas></div>
+        </div>
+      </div>
     </section>
   </main>
 

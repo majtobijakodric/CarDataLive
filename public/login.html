@@ -3,37 +3,88 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OBD2 Logger — Sign in</title>
+  <title>CarDataLive — Sign in</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body class="login-body">
   <main class="login-card">
-    <h1 class="login-title">OBD2 Data Logger</h1>
-    <p class="login-sub">Enter PIN to continue</p>
-    <form id="login-form" autocomplete="off">
-      <input
-        id="pin-input"
-        class="pin-input"
-        type="password"
-        inputmode="numeric"
-        placeholder="••••"
-        autofocus
-      />
-      <button class="btn-primary" type="submit">Unlock</button>
-      <div id="login-error" class="login-error"></div>
-    </form>
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div class="brand-name">
+        <div class="name">CarDataLive</div>
+        <div class="sub">OBD-II TELEMETRY</div>
+      </div>
+    </div>
+
+    <div class="login-rule"></div>
+    <div class="login-prompt">Access — enter PIN</div>
+
+    <div class="pin-dots" id="pin-dots"></div>
+
+    <div class="keypad" id="keypad"></div>
+
+    <div class="login-hint" id="login-hint">Enter your PIN, then press ⏎</div>
   </main>
 
   <script>
-    const form = document.getElementById('login-form');
-    const input = document.getElementById('pin-input');
-    const errEl = document.getElementById('login-error');
+    const MIN_DOTS = 4;
+    const dotsEl = document.getElementById('pin-dots');
+    const padEl = document.getElementById('keypad');
+    const hintEl = document.getElementById('login-hint');
+    let pin = '';
+    let busy = false;
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      errEl.textContent = '';
-      const pin = input.value.trim();
-      if (!pin) return;
+    function renderDots() {
+      const n = Math.max(MIN_DOTS, pin.length);
+      let html = '';
+      for (let i = 0; i < n; i++) {
+        html += `<span class="pin-dot${i < pin.length ? ' filled' : ''}"></span>`;
+      }
+      dotsEl.innerHTML = html;
+    }
+
+    function setHint(msg, isError) {
+      hintEl.textContent = msg;
+      hintEl.classList.toggle('error', !!isError);
+    }
+
+    // 1-9, then ⌫ · 0 · ⏎
+    const keys = ['1','2','3','4','5','6','7','8','9','del','0','ok'];
+    padEl.innerHTML = keys.map((k) => {
+      const label = k === 'del' ? '⌫' : k === 'ok' ? '⏎' : k;
+      return `<button type="button" data-key="${k}">${label}</button>`;
+    }).join('');
+
+    function press(k) {
+      if (busy) return;
+      if (k === 'del') { pin = pin.slice(0, -1); renderDots(); return; }
+      if (k === 'ok') { submit(); return; }
+      if (/^[0-9]$/.test(k)) {
+        if (pin.length >= 12) return;
+        pin += k;
+        renderDots();
+      }
+    }
+
+    padEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (btn) press(btn.dataset.key);
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (/^[0-9]$/.test(e.key)) press(e.key);
+      else if (e.key === 'Backspace') press('del');
+      else if (e.key === 'Enter') press('ok');
+    });
+
+    async function submit() {
+      if (busy) return;
+      if (!pin) { setHint('Enter your PIN, then press ⏎'); return; }
+      busy = true;
+      setHint('Checking…');
       try {
         const res = await fetch('/auth/login', {
           method: 'POST',
@@ -42,16 +93,20 @@
         });
         if (res.ok) {
           window.location.href = '/';
-        } else {
-          const data = await res.json().catch(() => ({}));
-          errEl.textContent = data.error || 'Incorrect PIN';
-          input.value = '';
-          input.focus();
+          return;
         }
+        const data = await res.json().catch(() => ({}));
+        setHint(data.error || 'Incorrect PIN', true);
+        pin = '';
+        renderDots();
       } catch (err) {
-        errEl.textContent = 'Network error';
+        setHint('Network error', true);
+      } finally {
+        busy = false;
       }
-    });
+    }
+
+    renderDots();
   </script>
 </body>
 </html>
